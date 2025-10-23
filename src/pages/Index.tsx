@@ -6,6 +6,10 @@ import Icon from '@/components/ui/icon';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import Scene3D from '@/components/Scene3D';
+import CodeEditor from '@/components/CodeEditor';
+import ExportDialog from '@/components/ExportDialog';
+import { toast } from 'sonner';
 
 type GameObject = {
   id: string;
@@ -39,19 +43,23 @@ const Index = () => {
       children: []
     }
   ]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   const addObject = (type: 'cube' | 'sphere' | 'light') => {
     const newObject: GameObject = {
       id: `${type}-${Date.now()}`,
       name: `${type.charAt(0).toUpperCase() + type.slice(1)} ${sceneObjects.length}`,
       type,
-      position: { x: 0, y: 0, z: 0 },
+      position: { x: 0, y: 0.5, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
       children: []
     };
     setSceneObjects([...sceneObjects, newObject]);
     setSelectedObject(newObject);
+    toast.success(`${newObject.name} added to scene`);
   };
 
   const updateObjectProperty = (category: 'position' | 'rotation' | 'scale', axis: 'x' | 'y' | 'z', value: number) => {
@@ -69,6 +77,23 @@ const Index = () => {
     setSceneObjects(sceneObjects.map(obj => obj.id === updated.id ? updated : obj));
   };
 
+  const handleSelectObject = (id: string) => {
+    const obj = sceneObjects.find(o => o.id === id);
+    if (obj) setSelectedObject(obj);
+  };
+
+  const handlePlay = () => {
+    setIsPlaying(!isPlaying);
+    toast.success(isPlaying ? 'Game stopped' : 'Game running');
+  };
+
+  const deleteObject = () => {
+    if (!selectedObject) return;
+    setSceneObjects(sceneObjects.filter(obj => obj.id !== selectedObject.id));
+    toast.success(`${selectedObject.name} deleted`);
+    setSelectedObject(null);
+  };
+
   const renderHierarchyItem = (obj: GameObject, depth = 0) => (
     <div key={obj.id} style={{ paddingLeft: `${depth * 16}px` }}>
       <button
@@ -78,7 +103,7 @@ const Index = () => {
         }`}
       >
         <Icon 
-          name={obj.type === 'camera' ? 'Camera' : obj.type === 'light' ? 'Lightbulb' : 'Box'} 
+          name={obj.type === 'camera' ? 'Camera' : obj.type === 'light' ? 'Lightbulb' : obj.type === 'sphere' ? 'Circle' : 'Box'} 
           size={14} 
         />
         {obj.name}
@@ -88,7 +113,10 @@ const Index = () => {
   );
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[hsl(var(--editor-bg))] text-foreground overflow-hidden">
+    <div className="h-screen w-screen flex flex-col bg-[hsl(var(--editor-bg))] text-foreground overflow-hidden relative">
+      {showCodeEditor && <CodeEditor onClose={() => setShowCodeEditor(false)} />}
+      <ExportDialog open={showExportDialog} onOpenChange={setShowExportDialog} />
+
       <div className="toolbar h-10 flex items-center justify-between px-3">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -97,26 +125,30 @@ const Index = () => {
           </div>
           <Separator orientation="vertical" className="h-5" />
           <div className="flex gap-1">
-            <Button variant="ghost" size="sm" className="h-7 text-xs">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.info('File menu')}>
               <Icon name="File" size={14} className="mr-1" />
               File
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.info('Edit menu')}>
               <Icon name="Pencil" size={14} className="mr-1" />
               Edit
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.info('Project settings')}>
               <Icon name="Settings" size={14} className="mr-1" />
               Project
             </Button>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" className="h-7 bg-secondary hover:bg-secondary/80">
-            <Icon name="Play" size={14} className="mr-1" />
-            Play
+          <Button 
+            size="sm" 
+            className="h-7 bg-secondary hover:bg-secondary/80"
+            onClick={handlePlay}
+          >
+            <Icon name={isPlaying ? 'Pause' : 'Play'} size={14} className="mr-1" />
+            {isPlaying ? 'Stop' : 'Play'}
           </Button>
-          <Button variant="outline" size="sm" className="h-7">
+          <Button variant="outline" size="sm" className="h-7" onClick={() => setShowExportDialog(true)}>
             <Icon name="Download" size={14} className="mr-1" />
             Export
           </Button>
@@ -127,7 +159,12 @@ const Index = () => {
         <div className="panel w-64 flex flex-col">
           <div className="toolbar h-9 flex items-center justify-between px-3">
             <span className="text-xs font-medium">Hierarchy</span>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 w-6 p-0"
+              onClick={() => addObject('cube')}
+            >
               <Icon name="Plus" size={14} />
             </Button>
           </div>
@@ -144,7 +181,7 @@ const Index = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-6 px-2"
+                className="h-6 px-2 hover:bg-primary/20"
                 onClick={() => addObject('cube')}
               >
                 <Icon name="Box" size={14} className="mr-1" />
@@ -153,7 +190,7 @@ const Index = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-6 px-2"
+                className="h-6 px-2 hover:bg-secondary/20"
                 onClick={() => addObject('sphere')}
               >
                 <Icon name="Circle" size={14} className="mr-1" />
@@ -162,7 +199,7 @@ const Index = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-6 px-2"
+                className="h-6 px-2 hover:bg-accent/20"
                 onClick={() => addObject('light')}
               >
                 <Icon name="Lightbulb" size={14} className="mr-1" />
@@ -170,60 +207,63 @@ const Index = () => {
               </Button>
             </div>
             <div className="flex gap-1">
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0"
+                onClick={() => setShowCodeEditor(true)}
+              >
+                <Icon name="Code" size={14} />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0"
+                onClick={() => toast.info('Move tool selected')}
+              >
                 <Icon name="Move" size={14} />
               </Button>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0"
+                onClick={() => toast.info('Rotate tool selected')}
+              >
                 <Icon name="RotateCw" size={14} />
               </Button>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0"
+                onClick={() => toast.info('Scale tool selected')}
+              >
                 <Icon name="Maximize2" size={14} />
               </Button>
             </div>
           </div>
 
-          <div className="flex-1 bg-[hsl(var(--panel-bg))] m-2 rounded border border-[hsl(var(--panel-border))] relative overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div 
-                className="relative w-full h-full"
-                style={{
-                  background: 'radial-gradient(circle at 50% 50%, hsl(0 0% 15%) 0%, hsl(0 0% 9.4%) 100%)',
-                  backgroundImage: `
-                    linear-gradient(hsl(0 0% 20% / 0.1) 1px, transparent 1px),
-                    linear-gradient(90deg, hsl(0 0% 20% / 0.1) 1px, transparent 1px)
-                  `,
-                  backgroundSize: '50px 50px'
-                }}
-              >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {sceneObjects.filter(obj => obj.type === 'cube' || obj.type === 'sphere').map(obj => (
-                    <div
-                      key={obj.id}
-                      className={`absolute transition-all cursor-pointer hover:scale-105 ${
-                        selectedObject?.id === obj.id ? 'ring-2 ring-primary' : ''
-                      }`}
-                      style={{
-                        width: `${obj.scale.x * 80}px`,
-                        height: `${obj.scale.y * 80}px`,
-                        transform: `translate(${obj.position.x * 50}px, ${-obj.position.y * 50}px) rotate(${obj.rotation.z}deg)`,
-                        borderRadius: obj.type === 'sphere' ? '50%' : '4px',
-                        background: obj.type === 'cube' 
-                          ? 'linear-gradient(135deg, hsl(207 100% 50%), hsl(207 100% 35%))' 
-                          : 'radial-gradient(circle at 30% 30%, hsl(174 97% 50%), hsl(174 97% 35%))',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
-                      }}
-                      onClick={() => setSelectedObject(obj)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+          <div className="flex-1 m-2 rounded border border-[hsl(var(--panel-border))] overflow-hidden">
+            <Scene3D 
+              objects={sceneObjects}
+              selectedId={selectedObject?.id}
+              onSelect={handleSelectObject}
+            />
           </div>
         </div>
 
         <div className="panel w-72 flex flex-col">
-          <div className="toolbar h-9 flex items-center px-3">
+          <div className="toolbar h-9 flex items-center justify-between px-3">
             <span className="text-xs font-medium">Inspector</span>
+            {selectedObject && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                onClick={deleteObject}
+              >
+                <Icon name="Trash2" size={14} />
+              </Button>
+            )}
           </div>
           <ScrollArea className="flex-1">
             <div className="p-4">
@@ -307,15 +347,32 @@ const Index = () => {
 
                   <Separator />
 
-                  <Card className="p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Icon name={selectedObject.type === 'cube' ? 'Box' : 'Circle'} size={16} className="text-primary" />
-                      <span className="text-xs font-medium">
-                        {selectedObject.type === 'cube' ? 'Mesh Renderer' : selectedObject.type === 'sphere' ? 'Sphere Collider' : 'Light Source'}
-                      </span>
+                  <Card className="p-3 bg-accent/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Icon 
+                          name={selectedObject.type === 'cube' ? 'Box' : selectedObject.type === 'sphere' ? 'Circle' : 'Lightbulb'} 
+                          size={16} 
+                          className="text-primary" 
+                        />
+                        <span className="text-xs font-medium">
+                          {selectedObject.type === 'cube' ? 'Mesh Renderer' : 
+                           selectedObject.type === 'sphere' ? 'Sphere Collider' : 
+                           'Light Source'}
+                        </span>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2"
+                        onClick={() => setShowCodeEditor(true)}
+                      >
+                        <Icon name="Code" size={12} className="mr-1" />
+                        Script
+                      </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Component properties will appear here
+                      Physics: {selectedObject.type !== 'light' ? 'Enabled' : 'N/A'}
                     </p>
                   </Card>
                 </div>
@@ -332,14 +389,14 @@ const Index = () => {
 
       <div className="toolbar h-6 flex items-center justify-between px-3 text-xs text-muted-foreground">
         <div className="flex gap-4">
-          <span>Ready</span>
+          <span className="text-secondary">{isPlaying ? '▶ Running' : '⏸ Ready'}</span>
           <span>•</span>
           <span>{sceneObjects.length} objects</span>
         </div>
         <div className="flex gap-4">
           <span>FPS: 60</span>
           <span>•</span>
-          <span>Viewport: 3D</span>
+          <span>3D Viewport</span>
         </div>
       </div>
     </div>
