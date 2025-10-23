@@ -1,7 +1,4 @@
-import { useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Grid, GizmoHelper, GizmoViewport } from '@react-three/drei';
-import * as THREE from 'three';
+import { useEffect, useRef, useState } from 'react';
 
 type GameObject = {
   id: string;
@@ -18,102 +15,175 @@ type Scene3DProps = {
   onSelect: (id: string) => void;
 };
 
-function SceneObject({ obj, isSelected, onSelect }: { obj: GameObject; isSelected: boolean; onSelect: () => void }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [hovered, setHovered] = useState(false);
-
-  useFrame((state) => {
-    if (meshRef.current && obj.type === 'cube') {
-      meshRef.current.rotation.x += 0.001;
-      meshRef.current.rotation.y += 0.001;
-    }
-  });
-
-  if (obj.type === 'light') {
-    return (
-      <directionalLight
-        position={[obj.position.x, obj.position.y, obj.position.z]}
-        intensity={1}
-        castShadow
-      />
-    );
-  }
-
-  if (obj.type === 'camera') {
-    return null;
-  }
-
-  return (
-    <mesh
-      ref={meshRef}
-      position={[obj.position.x, obj.position.y, obj.position.z]}
-      rotation={[
-        obj.rotation.x * Math.PI / 180,
-        obj.rotation.y * Math.PI / 180,
-        obj.rotation.z * Math.PI / 180
-      ]}
-      scale={[obj.scale.x, obj.scale.y, obj.scale.z]}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect();
-      }}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
-      castShadow
-      receiveShadow
-    >
-      {obj.type === 'cube' ? (
-        <boxGeometry args={[1, 1, 1]} />
-      ) : (
-        <sphereGeometry args={[0.5, 32, 32]} />
-      )}
-      <meshStandardMaterial
-        color={isSelected ? '#0EA5E9' : hovered ? '#4EC9B0' : obj.type === 'cube' ? '#007ACC' : '#4EC9B0'}
-        emissive={isSelected || hovered ? '#007ACC' : '#000000'}
-        emissiveIntensity={isSelected ? 0.3 : hovered ? 0.2 : 0}
-      />
-    </mesh>
-  );
-}
-
 const Scene3D = ({ objects, selectedId, onSelect }: Scene3DProps) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [rotation, setRotation] = useState(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const animate = () => {
+      ctx.fillStyle = '#0f0f0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const gridSize = 40;
+      const gridCount = 20;
+
+      ctx.strokeStyle = '#303030';
+      ctx.lineWidth = 1;
+      for (let i = -gridCount; i <= gridCount; i++) {
+        ctx.beginPath();
+        ctx.moveTo(centerX + i * gridSize, 0);
+        ctx.lineTo(centerX + i * gridSize, canvas.height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, centerY + i * gridSize);
+        ctx.lineTo(canvas.width, centerY + i * gridSize);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#007ACC';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX, 0);
+      ctx.lineTo(centerX, canvas.height);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#4EC9B0';
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(canvas.width, centerY);
+      ctx.stroke();
+
+      objects.forEach(obj => {
+        if (obj.type === 'light' || obj.type === 'camera') return;
+
+        const scale = 60;
+        const x = centerX + obj.position.x * scale;
+        const y = centerY - obj.position.y * scale - obj.position.z * scale * 0.5;
+        const size = Math.max(30, obj.scale.x * 60);
+        
+        const isSelected = obj.id === selectedId;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate((obj.rotation.y + rotation) * Math.PI / 180);
+
+        ctx.shadowBlur = isSelected ? 20 : 10;
+        ctx.shadowColor = isSelected ? '#007ACC' : '#000000';
+        ctx.shadowOffsetY = 5;
+
+        if (obj.type === 'sphere') {
+          const gradient = ctx.createRadialGradient(
+            -size * 0.2, -size * 0.2, 0,
+            0, 0, size / 2
+          );
+          gradient.addColorStop(0, '#4EC9B0');
+          gradient.addColorStop(1, '#2A8070');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (isSelected) {
+            ctx.strokeStyle = '#007ACC';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+        } else {
+          const gradient = ctx.createLinearGradient(-size/2, -size/2, size/2, size/2);
+          gradient.addColorStop(0, '#007ACC');
+          gradient.addColorStop(1, '#005A9E');
+          ctx.fillStyle = gradient;
+          
+          ctx.fillRect(-size/2, -size/2, size, size);
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+          ctx.fillRect(-size/2, -size/2, size/4, size);
+
+          if (isSelected) {
+            ctx.strokeStyle = '#4EC9B0';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-size/2, -size/2, size, size);
+          }
+        }
+
+        ctx.restore();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '11px -apple-system, system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(obj.name, x, y + size/2 + 15);
+      });
+
+      setRotation(r => (r + 0.3) % 360);
+      requestAnimationFrame(animate);
+    };
+
+    const resizeCanvas = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    const animationId = requestAnimationFrame(animate);
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      cancelAnimationFrame(animationId);
+    };
+  }, [objects, selectedId, rotation]);
+
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const scale = 60;
+
+    for (const obj of objects) {
+      if (obj.type === 'light' || obj.type === 'camera') continue;
+
+      const objX = centerX + obj.position.x * scale;
+      const objY = centerY - obj.position.y * scale - obj.position.z * scale * 0.5;
+      const size = Math.max(30, obj.scale.x * 60);
+
+      if (obj.type === 'sphere') {
+        const dist = Math.sqrt((x - objX) ** 2 + (y - objY) ** 2);
+        if (dist < size / 2) {
+          onSelect(obj.id);
+          return;
+        }
+      } else {
+        if (x > objX - size/2 && x < objX + size/2 && 
+            y > objY - size/2 && y < objY + size/2) {
+          onSelect(obj.id);
+          return;
+        }
+      }
+    }
+  };
+
   return (
-    <Canvas
-      shadows
-      camera={{ position: [5, 5, 5], fov: 50 }}
+    <canvas
+      ref={canvasRef}
+      onClick={handleClick}
+      className="w-full h-full cursor-pointer"
       style={{ background: 'radial-gradient(circle at 50% 50%, hsl(0 0% 15%) 0%, hsl(0 0% 9.4%) 100%)' }}
-    >
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-      
-      <Grid
-        args={[20, 20]}
-        cellSize={0.5}
-        cellThickness={0.5}
-        cellColor="#303030"
-        sectionSize={2}
-        sectionThickness={1}
-        sectionColor="#404040"
-        fadeDistance={25}
-        fadeStrength={1}
-        infiniteGrid
-      />
-
-      {objects.map(obj => (
-        <SceneObject
-          key={obj.id}
-          obj={obj}
-          isSelected={obj.id === selectedId}
-          onSelect={() => onSelect(obj.id)}
-        />
-      ))}
-
-      <OrbitControls makeDefault />
-      
-      <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-        <GizmoViewport axisColors={['#007ACC', '#4EC9B0', '#C586C0']} labelColor="white" />
-      </GizmoHelper>
-    </Canvas>
+    />
   );
 };
 
